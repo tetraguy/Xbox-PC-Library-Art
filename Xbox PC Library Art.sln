@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36414.22 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xbox PC Library Art", "Xbox PC Library Art\Xbox PC Library Art.csproj", "{92FECCFB-FE77-4B0A-9363-DB494E538F79}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{92FECCFB-FE77-4B0A-9363-DB494E538F79}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{92FECCFB-FE77-4B0A-9363-DB494E538F79}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{92FECCFB-FE77-4B0A-9363-DB494E538F79}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{92FECCFB-FE77-4B0A-9363-DB494E538F79}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {24149C23-0684-451F-AFD8-115C0DA24D6A}
+	EndGlobalSection
+EndGlobal

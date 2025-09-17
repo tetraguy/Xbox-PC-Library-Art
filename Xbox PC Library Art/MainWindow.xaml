@@ -1,0 +1,101 @@
+﻿<Window x:Class="XboxSteamCoverArtFixer.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Xbox PC - Steam Cover Art Fixer" Height="720" Width="1100"
+        Background="#F5F7FA">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top bar -->
+        <DockPanel Grid.Row="0" LastChildFill="False">
+            <TextBlock Text="Steam Cover Art Fixer"
+                       FontSize="22" FontWeight="Bold" Margin="0,0,16,0"
+                       VerticalAlignment="Center"/>
+            <Button x:Name="ScanButton" Content="Scan Folder" Margin="4"
+                    Padding="12,6" Click="ScanButton_Click"/>
+            <Button x:Name="ReplaceButton" Content="Download Cover Art"
+                    Margin="4" Padding="12,6" Click="ReplaceButton_Click"
+                    IsEnabled="False"/>
+        </DockPanel>
+
+        <!-- Main area -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="520"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Left: list -->
+            <Border Grid.Column="0" Background="White" CornerRadius="10" Padding="12" BorderBrush="#E1E5EA" BorderThickness="1">
+                <DockPanel>
+                    <TextBlock DockPanel.Dock="Top" Text="Detected Xbox PC Steam Library "
+                               FontSize="16" FontWeight="SemiBold" Margin="4,0,0,8"/>
+                    <ListView x:Name="ImagesList" SelectionMode="Single" SelectionChanged="ImagesList_SelectionChanged">
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="12"/>
+                                        <ColumnDefinition Width="*"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Border Grid.Column="0" BorderBrush="#E5E8EE" BorderThickness="1" CornerRadius="6" Padding="2">
+                                        <Image Width="64" Height="64" Source="{Binding Thumbnail}"/>
+                                    </Border>
+                                    <StackPanel Grid.Column="2">
+                                        <!-- Show GameName (if known) then file -->
+                                        <TextBlock Text="{Binding GameName}" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding FileName}" Foreground="#555" />
+                                        <TextBlock Text="{Binding FilePath}" Foreground="#80849A" FontSize="12" TextTrimming="CharacterEllipsis"/>
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </DockPanel>
+            </Border>
+
+            <!-- Right: preview -->
+            <Border Grid.Column="2" Background="White" CornerRadius="10" Padding="12" BorderBrush="#E1E5EA" BorderThickness="1">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Preview &amp; Actions" FontSize="16" FontWeight="SemiBold" Margin="4,0,0,2"/>
+                        <TextBlock x:Name="GameTitle" Text="" FontSize="14" FontWeight="SemiBold" Foreground="#333" Margin="4,0,0,8"/>
+                    </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="24"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0">
+                            <TextBlock Text="Current" Foreground="#80849A" FontSize="12"/>
+                            <Border BorderBrush="#E5E8EE" BorderThickness="1" CornerRadius="8" Padding="6" Margin="0,4,0,0">
+                                <Image x:Name="PreviewImage" Width="200" Height="200" Stretch="Uniform"/>
+                            </Border>
+                        </StackPanel>
+
+                        <StackPanel Grid.Column="2">
+                            <TextBlock Text="Info" Foreground="#80849A" FontSize="12"/>
+                            <TextBlock x:Name="SelectedInfo" Text="Select an item..." Margin="0,4,0,0"/>
+                            <TextBlock Text="Tip: close Xbox app before replacing to avoid file locks."
+                                       Foreground="#80849A" FontSize="12" Margin="0,12,0,0" TextWrapping="Wrap" Width="260"/>
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
