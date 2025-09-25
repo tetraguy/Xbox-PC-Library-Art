@@ -5,6 +5,8 @@ namespace System.Windows
     {
         private static object? dialogResult;
 
+        public static object DialogResult { get; internal set; }
+
         public static object GetDialogResult()
         {
             return dialogResult;

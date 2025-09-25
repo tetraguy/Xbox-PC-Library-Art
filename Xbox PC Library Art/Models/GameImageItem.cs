@@ -7,12 +7,15 @@ using System.Windows.Media.Imaging;
 
 namespace XboxSteamCoverArtFixer.Models
 {
+    public enum LibrarySource { Steam, Other }
+
     public class GameImageItem : INotifyPropertyChanged
     {
         public string FilePath { get; }
         public string FileName => Path.GetFileName(FilePath);
-        public string? GameId { get; }                  // Steam AppID parsed from filename
+        public LibrarySource Source { get; }               // NEW
 
+        public string? GameId { get; }                     // Steam AppID if Steam
         private int? _sgdbGameId;
         public int? SgdbGameId
         {
@@ -31,16 +34,16 @@ namespace XboxSteamCoverArtFixer.Models
 
         private static readonly Regex IdRegex = new(@"Steam-(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-        public GameImageItem(string path)
+        public GameImageItem(string path, LibrarySource source = LibrarySource.Steam)
         {
             FilePath = path;
-            GameId = TryExtractId(path);
+            Source = source;
+            GameId = (source == LibrarySource.Steam) ? TryExtractSteamId(path) : null;
             Thumbnail = LoadThumb(path);
         }
 
         public void SetGameInfo(int? sgdbId, string? name)
         {
-            // Ensure updates are marshalled to the UI thread
             var disp = System.Windows.Application.Current?.Dispatcher;
             if (disp != null && !disp.CheckAccess())
             {
@@ -53,7 +56,7 @@ namespace XboxSteamCoverArtFixer.Models
             }
         }
 
-        private static string? TryExtractId(string path)
+        private static string? TryExtractSteamId(string path)
         {
             var name = Path.GetFileNameWithoutExtension(path);
             var m = IdRegex.Match(name);

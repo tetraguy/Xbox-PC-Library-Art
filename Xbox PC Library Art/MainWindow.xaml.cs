@@ -9,6 +9,7 @@ using System.Windows.Media.Imaging;
 using XboxSteamCoverArtFixer.Models;
 using XboxSteamCoverArtFixer.Services;
 using WinForms = System.Windows.Forms;
+using Microsoft.Win32; // for WPF OpenFileDialog (used in AddYourImage)
 
 namespace XboxSteamCoverArtFixer
 {
@@ -17,9 +18,11 @@ namespace XboxSteamCoverArtFixer
         private readonly ObservableCollection<GameImageItem> _items = new();
         private SteamGridDbClient? _sgdb;
 
-        private readonly string _defaultPath = Path.Combine(
+        private readonly string _thirdPartyRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            @"Packages\Microsoft.GamingApp_8wekyb3d8bbwe\LocalState\ThirdPartyLibraries\Steam");
+            @"Packages\Microsoft.GamingApp_8wekyb3d8bbwe\LocalState\ThirdPartyLibraries");
+
+        private string SteamFolder => Path.Combine(_thirdPartyRoot, "Steam");
 
         public MainWindow()
         {
@@ -27,60 +30,30 @@ namespace XboxSteamCoverArtFixer
             ImagesList.ItemsSource = _items;
 
             var apiKey = XboxSteamCoverArtFixer.Services.Config.SteamGridDbApiKey;
-            if (string.IsNullOrWhiteSpace(apiKey))
-            {
-                MessageBox.Show("SteamGridDB API key is missing.", "SteamGridDB", MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
-            else
-            {
+            if (!string.IsNullOrWhiteSpace(apiKey))
                 _sgdb = new SteamGridDbClient(apiKey);
-            }
         }
 
-        // 1) Rescan always clears and reloads (images + game names)
+        // ---------- existing Steam scan ----------
         private async void ScanButton_Click(object sender, RoutedEventArgs e)
         {
             try
             {
-                string path = _defaultPath;
+                string path = SteamFolder;
 
                 if (!Directory.Exists(path))
                 {
                     MessageBox.Show(
-                        $"Default path not found:\n{_defaultPath}\n\nPick the Xbox Steam cache folder.",
+                        $"Default path not found:\n{SteamFolder}\n\nPick the Xbox Steam cache folder.",
                         "Scan",
                         MessageBoxButton.OK,
                         MessageBoxImage.Information);
 
-                    // pick folder when default path isn't found
-                    var dlg = new WinForms.FolderBrowserDialog
-                    {
-                        Description = "Select the Xbox app's Steam cache folder",
-                        // UseDescriptionForTitle is available on .NET 6+; if your IDE balks, remove it.
-                        UseDescriptionForTitle = true,
-                        ShowNewFolderButton = false
-                    };
-
-                    var result = dlg.ShowDialog();  // System.Windows.Forms.DialogResult
-                    if (result == WinForms.GetDialogResult() && Directory.Exists(dlg.SelectedPath))
-                    {
-                        path = dlg.SelectedPath;
-                    }
-                    else
-                    {
-                        return; // user cancelled
-                    }
 
                 }
 
-                // Clear UI
-                _items.Clear();
-                PreviewImage.Source = null;
-                GameTitle.Text = "";
-                SelectedInfo.Text = "Select an item...";
-                ReplaceButton.IsEnabled = false;
+                ResetUi();
 
-                // Load files
                 var files = Directory.EnumerateFiles(path, "*.png", SearchOption.TopDirectoryOnly)
                                      .Where(f => Path.GetFileName(f).StartsWith("Steam-", StringComparison.OrdinalIgnoreCase))
                                      .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
@@ -88,14 +61,11 @@ namespace XboxSteamCoverArtFixer
 
                 foreach (var f in files)
                 {
-                    try { _items.Add(new GameImageItem(f)); } catch { /* ignore bad */ }
+                    try { _items.Add(new GameImageItem(f, LibrarySource.Steam)); } catch { }
                 }
 
-                // Resolve names in background
                 if (_sgdb != null)
-                {
-                    await PopulateGameNamesAsync(_sgdb, _items);
-                }
+                    await PopulateGameNamesAsync(_sgdb, _items.Where(i => i.Source == LibrarySource.Steam).ToList());
             }
             catch (Exception ex)
             {
@@ -103,8 +73,57 @@ namespace XboxSteamCoverArtFixer
             }
         }
 
-        // Resolve SGDB id + game name for each item (throttled)
-        private static async Task PopulateGameNamesAsync(SteamGridDbClient client, ObservableCollection<GameImageItem> items)
+        // ---------- NEW: Scan Other Folders (GOG/Epic/Ubisoft) ----------
+        private void ScanOtherButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                ResetUi();
+
+                var libs = new[] { "GOG", "Epic", "Ubisoft" };
+                foreach (var lib in libs)
+                {
+                    var p = Path.Combine(_thirdPartyRoot, lib);
+                    if (!Directory.Exists(p)) continue;
+
+                    var files = Directory.EnumerateFiles(p, "*.png", SearchOption.TopDirectoryOnly)
+                                         .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
+
+                    foreach (var f in files)
+                    {
+                        try
+                        {
+                            var item = new GameImageItem(f, LibrarySource.Other)
+                            {
+                                // Nice display name from filename (no API)
+                                GameName = FriendlyName(Path.GetFileNameWithoutExtension(f))
+                            };
+                            _items.Add(item);
+                        }
+                        catch { /* ignore bad file */ }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Scan Other Folders", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
+        private static string FriendlyName(string stem)
+        {
+            // Strip common prefixes and prettify
+            string s = stem;
+            foreach (var pref in new[] { "GOG-", "Epic-", "Ubisoft-" })
+                if (s.StartsWith(pref, StringComparison.OrdinalIgnoreCase))
+                    s = s[pref.Length..];
+
+            s = s.Replace('_', ' ').Replace('-', ' ').Trim();
+            return s;
+        }
+
+        // ---------- shared helpers ----------
+        private static async Task PopulateGameNamesAsync(SteamGridDbClient client, System.Collections.Generic.IEnumerable<GameImageItem> items)
         {
             using var gate = new SemaphoreSlim(6);
             var tasks = items
@@ -115,29 +134,38 @@ namespace XboxSteamCoverArtFixer
                     try
                     {
                         var game = await client.ResolveGameFromSteamAppIdAsync(i.GameId!);
-                        // Notify UI via SetGameInfo (raises PropertyChanged on UI thread)
                         i.SetGameInfo(game?.Id, game?.Name);
                     }
-                    catch
-                    {
-                        // leave as-is if lookup fails
-                    }
+                    catch { }
                     finally { gate.Release(); }
                 }).ToList();
 
             await Task.WhenAll(tasks);
         }
 
+        private void ResetUi()
+        {
+            _items.Clear();
+            PreviewImage.Source = null;
+            GameTitle.Text = "";
+            SelectedInfo.Text = "Select an item...";
+            ReplaceButton.IsEnabled = false;
+            AddYourImageButton.IsEnabled = false;
+        }
 
         private void ImagesList_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
         {
             var item = ImagesList.SelectedItem as GameImageItem;
-            ReplaceButton.IsEnabled = item != null;
+
+            // Only Steam items can use SteamGridDB button
+            ReplaceButton.IsEnabled = (item != null && item.Source == LibrarySource.Steam);
+            // Any item can use Add Your Image
+            AddYourImageButton.IsEnabled = (item != null);
 
             if (item != null)
             {
                 GameTitle.Text = item.GameName ?? "";
-                SelectedInfo.Text = $"File: {item.FileName}  •  GameId: {item.GameId ?? "N/A"}";
+                SelectedInfo.Text = $"File: {item.FileName}" + (item.Source == LibrarySource.Steam && item.GameId != null ? $"  •  GameId: {item.GameId}" : "");
                 PreviewImage.Source = LoadFull(item.FilePath);
             }
             else
@@ -162,6 +190,13 @@ namespace XboxSteamCoverArtFixer
         // 2) Download Cover Art (was "Replace")
         private async void ReplaceButton_Click(object sender, RoutedEventArgs e)
         {
+
+            if (ImagesList.SelectedItem is GameImageItem selected && selected.Source != LibrarySource.Steam)
+            {
+                MessageBox.Show("This entry is not from Steam. Use 'Add Your Image' to replace its artwork.", "Download Cover Art", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+
             if (_sgdb is null)
             {
                 MessageBox.Show("SteamGridDB API key missing.", "API", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -225,7 +260,44 @@ namespace XboxSteamCoverArtFixer
                 ReplaceButton.IsEnabled = ImagesList.SelectedItem != null;
             }
         }
-     
+
+
+        private void AddYourImageButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (ImagesList.SelectedItem is not GameImageItem item) return;
+
+            var ofd = new OpenFileDialog
+            {
+                Title = "Choose an image file",
+                Filter = "Image Files|*.png;*.jpg;*.jpeg|PNG (*.png)|*.png|JPEG (*.jpg;*.jpeg)|*.jpg;*.jpeg",
+                CheckFileExists = true,
+                Multiselect = false
+            };
+
+            // WPF dialog returns bool?, no enum needed
+            var ok = ofd.ShowDialog(this) == true;
+            if (!ok) return;
+
+            try
+            {
+                var bytes = File.ReadAllBytes(ofd.FileName);
+                var cropper = new CropWindow(bytes, System.IO.Path.GetFileName(ofd.FileName)) { Owner = this };
+
+                if (cropper.ShowDialog() == true && cropper.CroppedPng is { Length: > 0 } pngBytes)
+                {
+                    ImageHelper.WriteBackupOnce(item.FilePath);
+                    File.WriteAllBytes(item.FilePath, pngBytes);
+                    PreviewImage.Source = LoadFull(item.FilePath);
+                    MessageBox.Show("Image replaced successfully!", "Done", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(ex.Message, "Add Your Image", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
+
     }
+
+}
 

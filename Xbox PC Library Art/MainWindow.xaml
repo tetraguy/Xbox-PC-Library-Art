@@ -11,15 +11,24 @@
 
         <!-- Top bar -->
         <DockPanel Grid.Row="0" LastChildFill="False">
-            <TextBlock Text="Steam Cover Art Fixer"
-                       FontSize="22" FontWeight="Bold" Margin="0,0,16,0"
-                       VerticalAlignment="Center"/>
-            <Button x:Name="ScanButton" Content="Scan Folder" Margin="4"
-                    Padding="12,6" Click="ScanButton_Click"/>
+            <TextBlock Text="Xbox Steam Cover Art Fixer"
+             FontSize="22" FontWeight="Bold" Margin="0,0,16,0"
+             VerticalAlignment="Center"/>
+            <Button x:Name="ScanButton" Content="Scan Steam" Margin="4"
+          Padding="12,6" Click="ScanButton_Click"/>
+
+            <!-- NEW -->
+            <Button x:Name="ScanOtherButton" Content="Scan Other Stores" Margin="4"
+          Padding="12,6" Click="ScanOtherButton_Click"/>
+
             <Button x:Name="ReplaceButton" Content="Download Cover Art"
-                    Margin="4" Padding="12,6" Click="ReplaceButton_Click"
-                    IsEnabled="False"/>
+          Margin="4" Padding="12,6" Click="ReplaceButton_Click"
+          IsEnabled="False"/>
+            <Button x:Name="AddYourImageButton" Content="Add Your Image"
+          Margin="4" Padding="12,6" Click="AddYourImageButton_Click"
+          IsEnabled="False"/>
         </DockPanel>
+
 
         <!-- Main area -->
         <Grid Grid.Row="1">

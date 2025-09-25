@@ -1,0 +1,58 @@
+<Window x:Class="XboxSteamCoverArtFixer.CropWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Crop to 1:1" Height="640" Width="820" MinWidth="640" MinHeight="480"
+        WindowStartupLocation="CenterOwner">
+	<Grid Margin="12">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto"/>
+			<RowDefinition Height="*"/>
+			<RowDefinition Height="Auto"/>
+		</Grid.RowDefinitions>
+
+		<!-- Header -->
+		<StackPanel Grid.Row="0" Orientation="Vertical" Margin="0,0,0,8">
+			<TextBlock Text="Crop Artwork to 1:1" FontSize="16" FontWeight="SemiBold"/>
+			<TextBlock x:Name="FileLabel" FontSize="12" Foreground="#666"/>
+		</StackPanel>
+
+		<!-- Interactive area -->
+		<Grid x:Name="ImageHost"
+			  Grid.Row="1"
+			  Background="#111"
+			  ClipToBounds="True"
+			  Focusable="True" FocusVisualStyle="{x:Null}"
+			  MouseLeftButtonDown="ImageHost_MouseLeftButtonDown"
+			  MouseMove="ImageHost_MouseMove"
+			  MouseLeftButtonUp="ImageHost_MouseLeftButtonUp"
+			  MouseWheel="ImageHost_MouseWheel"
+			  SizeChanged="ImageHost_SizeChanged"
+			  PreviewKeyDown="Root_PreviewKeyDown"
+			  PreviewKeyUp="Root_PreviewKeyUp">
+			<!-- The image we pan/zoom -->
+			<Image x:Name="Img" RenderOptions.BitmapScalingMode="HighQuality" Stretch="None"/>
+
+			<!-- Overlay (not blocking mouse) -->
+			<Canvas IsHitTestVisible="False">
+				<Rectangle x:Name="ShadeTop"    Fill="#80000000"/>
+				<Rectangle x:Name="ShadeLeft"   Fill="#80000000"/>
+				<Rectangle x:Name="ShadeRight"  Fill="#80000000"/>
+				<Rectangle x:Name="ShadeBottom" Fill="#80000000"/>
+				<Border x:Name="CropFrame" BorderBrush="#FFFFFFFF" BorderThickness="2"/>
+			</Canvas>
+		</Grid>
+
+		<!-- Controls -->
+		<DockPanel Grid.Row="2" Margin="0,8,0,0">
+			<StackPanel Orientation="Horizontal" DockPanel.Dock="Left" VerticalAlignment="Center">
+				<TextBlock Text="Zoom" Margin="0,0,8,0" VerticalAlignment="Center"/>
+				<Slider x:Name="ZoomSlider" Minimum="0.5" Maximum="6" Value="1.15" Width="220"
+						ValueChanged="ZoomSlider_ValueChanged"/>
+			</StackPanel>
+			<StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+				<Button Content="Cancel" Margin="0,0,8,0" Padding="12,6" Click="Cancel_Click"/>
+				<Button x:Name="ReplaceBtn" Content="Replace" Padding="12,6" Click="Replace_Click"/>
+			</StackPanel>
+		</DockPanel>
+	</Grid>
+</Window>
