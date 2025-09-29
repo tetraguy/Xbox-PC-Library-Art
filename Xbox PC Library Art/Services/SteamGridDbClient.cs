@@ -76,6 +76,8 @@ namespace XboxSteamCoverArtFixer.Services
             [JsonPropertyName("url")] public string Url { get; set; } = "";
             [JsonPropertyName("thumb")] public string? Thumb { get; set; }
             [JsonPropertyName("mime")] public string? Mime { get; set; }
+            public object Width { get; internal set; }
+            public object Height { get; internal set; }
         }
     }
 }

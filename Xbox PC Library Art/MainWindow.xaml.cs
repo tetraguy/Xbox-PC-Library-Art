@@ -1,16 +1,12 @@
-﻿// MainWindow.xaml.cs  — revised per your 4 requests
-// 1) Read ALL *.png in the Steam folder (not only Steam-*.png)
-// 2) No prompt to browse other folders if none found (silent, just shows count)
-// 3) Never creates any extra folders (no Directory.CreateDirectory anywhere)
-// 4) No image backups are created (removed WriteBackupOnce calls)
-
-using System;
+﻿using System;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using Microsoft.Win32; // WPF OpenFileDialog
 using XboxSteamCoverArtFixer.Models;
@@ -23,17 +19,19 @@ namespace XboxSteamCoverArtFixer
         private readonly ObservableCollection<GameImageItem> _items = new();
         private SteamGridDbClient? _sgdb;
 
-        // %LOCALAPPDATA%\Packages\Microsoft.GamingApp_8wekyb3d8bbwe\LocalState\ThirdPartyLibraries
         private readonly string _thirdPartyRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             @"Packages\Microsoft.GamingApp_8wekyb3d8bbwe\LocalState\ThirdPartyLibraries");
 
-        private string SteamFolder => Path.Combine(_thirdPartyRoot, "steam");
+        private string SteamFolder => Path.Combine(_thirdPartyRoot, "Steam");
 
         public MainWindow()
         {
             InitializeComponent();
             ImagesList.ItemsSource = _items;
+
+            // Sharper preview rendering (blurriness fix)
+            RenderOptions.SetBitmapScalingMode(PreviewImage, BitmapScalingMode.HighQuality);
 
             var apiKey = Config.SteamGridDbApiKey;
             if (string.IsNullOrWhiteSpace(apiKey))
@@ -49,7 +47,6 @@ namespace XboxSteamCoverArtFixer
             {
                 string path = SteamFolder;
 
-                // If default folder is missing, allow choosing the Steam cache folder once.
                 if (!Directory.Exists(path))
                 {
                     MessageBox.Show(
@@ -68,13 +65,17 @@ namespace XboxSteamCoverArtFixer
                     if (!string.IsNullOrWhiteSpace(dlg.SelectedPath) && Directory.Exists(dlg.SelectedPath))
                         path = dlg.SelectedPath;
                     else
-                        return; // stop silently if nothing picked
+                        return;
                 }
 
                 ResetUi();
 
-                // Load *all* PNGs. If none at top, search recursively. (No prompts.)
-                var files = EnumeratePngs(path);
+                // Read ALL pngs from the Steam folder (top-level first, then recursive)
+                var files = Directory.EnumerateFiles(path, "*.png", SearchOption.TopDirectoryOnly)
+                                     .Concat(Directory.EnumerateFiles(path, "*.png", SearchOption.AllDirectories))
+                                     .Distinct(StringComparer.OrdinalIgnoreCase)
+                                     .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                                     .ToList();
 
                 foreach (var f in files)
                 {
@@ -86,8 +87,8 @@ namespace XboxSteamCoverArtFixer
                     : $"No PNG images found in: {path}";
                 GameTitle.Text = $"Steam Cache — {path}";
 
-                // Resolve names via SteamGridDB only for items that expose a Steam AppID
-                if (_sgdb != null && _items.Any(i => i.Source == LibrarySource.Steam))
+                // Resolve names via SteamGridDB only for items with AppIDs
+                if (_sgdb != null && _items.Any(i => i.Source == LibrarySource.Steam && !string.IsNullOrWhiteSpace(i.GameId)))
                     await PopulateGameNamesAsync(_sgdb, _items.Where(i => i.Source == LibrarySource.Steam).ToList());
             }
             catch (Exception ex)
@@ -96,24 +97,7 @@ namespace XboxSteamCoverArtFixer
             }
         }
 
-        // Helper: enumerate *.png (case-insensitive), top-level then recursive
-        private static System.Collections.Generic.List<string> EnumeratePngs(string root)
-        {
-            var list = Directory.EnumerateFiles(root, "*.png", SearchOption.TopDirectoryOnly)
-                                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                                .ToList();
-
-            if (list.Count == 0)
-            {
-                list = Directory.EnumerateFiles(root, "*.png", SearchOption.AllDirectories)
-                                .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
-                                .ToList();
-            }
-            return list;
-        }
-
         // ====================== Scan Other Folders (GOG/Epic/Ubisoft) ======================
-        // (This never creates folders; it only reads existing ones and loads their PNGs.)
         private void ScanOtherButton_Click(object sender, RoutedEventArgs e)
         {
             try
@@ -124,7 +108,7 @@ namespace XboxSteamCoverArtFixer
                 foreach (var lib in libs)
                 {
                     var p = Path.Combine(_thirdPartyRoot, lib);
-                    if (!Directory.Exists(p)) continue;
+                    if (!Directory.Exists(p)) continue; // never create anything
 
                     var files = Directory.EnumerateFiles(p, "*.png", SearchOption.TopDirectoryOnly)
                                          .OrderBy(f => f, StringComparer.OrdinalIgnoreCase);
@@ -139,7 +123,7 @@ namespace XboxSteamCoverArtFixer
                             };
                             _items.Add(item);
                         }
-                        catch { /* ignore */ }
+                        catch { }
                     }
                 }
 
@@ -170,18 +154,13 @@ namespace XboxSteamCoverArtFixer
         {
             var item = ImagesList.SelectedItem as GameImageItem;
 
-            // Enable SGDB only if it's a Steam item *and* we successfully parsed an AppID
-            ReplaceButton.IsEnabled = (item != null &&
-                                       item.Source == LibrarySource.Steam &&
-                                       !string.IsNullOrWhiteSpace(item.GameId));
-
-            // Add Your Image is always allowed
+            ReplaceButton.IsEnabled = (item != null && item.Source == LibrarySource.Steam);
             AddYourImageButton.IsEnabled = (item != null);
 
             if (item != null)
             {
                 GameTitle.Text = item.GameName ?? "";
-                SelectedInfo.Text = (item.Source == LibrarySource.Steam && !string.IsNullOrWhiteSpace(item.GameId))
+                SelectedInfo.Text = item.Source == LibrarySource.Steam && !string.IsNullOrWhiteSpace(item.GameId)
                     ? $"File: {item.FileName}  •  GameId: {item.GameId}"
                     : $"File: {item.FileName}";
                 PreviewImage.Source = LoadFull(item.FilePath);
@@ -193,7 +172,6 @@ namespace XboxSteamCoverArtFixer
                 PreviewImage.Source = null;
             }
         }
-
 
         // ====================== Download Cover Art (SteamGridDB) ======================
         private async void ReplaceButton_Click(object sender, RoutedEventArgs e)
@@ -208,21 +186,15 @@ namespace XboxSteamCoverArtFixer
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(item.GameId))
-            {
-                MessageBox.Show("Could not parse Steam AppID from the filename.",
-                    "Download Cover Art", MessageBoxButton.OK, MessageBoxImage.Information);
-                return;
-            }
-
-
             if (_sgdb is null)
             {
                 MessageBox.Show("SteamGridDB API key missing.", "API", MessageBoxButton.OK, MessageBoxImage.Warning);
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(item.GameId))
+            // Robust AppID extraction (fallback to re-extract from filename)
+            var appId = item.GameId ?? ExtractSteamAppIdFromFileName(item.FilePath);
+            if (string.IsNullOrWhiteSpace(appId))
             {
                 MessageBox.Show("Could not parse Steam AppID from the filename.",
                     "Download Cover Art", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -234,12 +206,13 @@ namespace XboxSteamCoverArtFixer
                 ReplaceButton.IsEnabled = false;
                 AddYourImageButton.IsEnabled = false;
 
+                // Ensure SGDB id/name present
                 if (item.SgdbGameId is null)
                 {
-                    var game = await _sgdb.ResolveGameFromSteamAppIdAsync(item.GameId!);
+                    var game = await _sgdb.ResolveGameFromSteamAppIdAsync(appId);
                     if (game == null)
                     {
-                        MessageBox.Show($"Could not resolve SteamGridDB game for Steam AppID {item.GameId}.",
+                        MessageBox.Show($"SteamGridDB has no match for Steam AppID {appId}.",
                             "SteamGridDB", MessageBoxButton.OK, MessageBoxImage.Information);
                         return;
                     }
@@ -254,7 +227,13 @@ namespace XboxSteamCoverArtFixer
                     return;
                 }
 
-                var picker = new IconPickerWindow(icons, item.GameName ?? $"Steam {item.GameId}") { Owner = this };
+                // (Quality) Prefer larger icons first if API provides dimensions
+                icons = icons
+                    .OrderByDescending(i => i.Width)   // Width/Height supported by SGDB
+                    .ThenByDescending(i => i.Height)
+                    .ToList();
+
+                var picker = new IconPickerWindow(icons, item.GameName ?? $"Steam {appId}") { Owner = this };
                 if (picker.ShowDialog() == true && picker.SelectedUrl is string chosenUrl)
                 {
                     var bytes = await _sgdb.DownloadBytesAsync(chosenUrl);
@@ -265,8 +244,10 @@ namespace XboxSteamCoverArtFixer
                         return;
                     }
 
+                    // Keep bytes as-is (no re-encode), only convert if not a PNG
                     var pngBytes = ImageHelper.EnsurePng(bytes);
-                    // No backup: directly overwrite the file as requested
+
+                    // No backup: overwrite directly
                     File.WriteAllBytes(item.FilePath, pngBytes);
 
                     PreviewImage.Source = LoadFull(item.FilePath);
@@ -283,6 +264,20 @@ namespace XboxSteamCoverArtFixer
                 ReplaceButton.IsEnabled = ImagesList.SelectedItem is GameImageItem g && g.Source == LibrarySource.Steam;
                 AddYourImageButton.IsEnabled = ImagesList.SelectedItem != null;
             }
+        }
+
+        // Extracts a Steam AppID from any filename form:
+        // "Steam-1150690.png", "steam_1150690", "steam1150690", etc.
+        private static string? ExtractSteamAppIdFromFileName(string path)
+        {
+            var stem = Path.GetFileNameWithoutExtension(path);
+            // prefer a "steam" prefix if present
+            var m = Regex.Match(stem, @"(?i)steam[-_ ]?(\d{3,9})");
+            if (m.Success) return m.Groups[1].Value;
+
+            // otherwise, any 3–9 digit run in the name
+            m = Regex.Match(stem, @"(?<!\d)(\d{3,9})(?!\d)");
+            return m.Success ? m.Groups[1].Value : null;
         }
 
         // ====================== Add Your Image (Crop to 1:1) ======================
@@ -307,8 +302,7 @@ namespace XboxSteamCoverArtFixer
 
                 if (cropper.ShowDialog() == true && cropper.CroppedPng is { Length: > 0 } pngBytes)
                 {
-                    // No backup: directly overwrite the file as requested
-                    File.WriteAllBytes(item.FilePath, pngBytes);
+                    File.WriteAllBytes(item.FilePath, pngBytes); // direct overwrite
                     PreviewImage.Source = LoadFull(item.FilePath);
                     MessageBox.Show("Image replaced successfully!", "Done",
                         MessageBoxButton.OK, MessageBoxImage.Information);
@@ -334,7 +328,7 @@ namespace XboxSteamCoverArtFixer
                         var game = await client.ResolveGameFromSteamAppIdAsync(i.GameId!);
                         i.SetGameInfo(game?.Id, game?.Name);
                     }
-                    catch { /* ignore */ }
+                    catch { }
                     finally { gate.Release(); }
                 }).ToList();
 
@@ -357,6 +351,7 @@ namespace XboxSteamCoverArtFixer
             bmp.BeginInit();
             bmp.CacheOption = BitmapCacheOption.OnLoad;
             bmp.UriSource = new Uri(path);
+            // Keep full fidelity in preview, render high quality via BitmapScalingMode
             bmp.EndInit();
             bmp.Freeze();
             return bmp;
