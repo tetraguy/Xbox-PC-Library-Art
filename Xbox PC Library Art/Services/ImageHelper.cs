@@ -28,13 +28,9 @@ namespace XboxSteamCoverArtFixer.Services
             return output.ToArray();
         }
 
-        public static void WriteBackupOnce(string path)
+        internal static object WriteBackupOnce(string filePath)
         {
-            var bak = path + ".bak";
-            if (!File.Exists(bak))
-            {
-                File.Copy(path, bak, overwrite: false);
-            }
+            throw new NotImplementedException();
         }
     }
 }

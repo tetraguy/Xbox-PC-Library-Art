@@ -4,6 +4,8 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Windows.Media.Imaging;
+using System.Text.RegularExpressions;
+
 
 namespace XboxSteamCoverArtFixer.Models
 {
@@ -59,7 +61,13 @@ namespace XboxSteamCoverArtFixer.Models
         private static string? TryExtractSteamId(string path)
         {
             var name = Path.GetFileNameWithoutExtension(path);
-            var m = IdRegex.Match(name);
+
+            // Preferred: "steam<sep>digits"
+            var m = Regex.Match(name, @"(?i)steam[-_ ]*(\d{3,10})");
+            if (m.Success) return m.Groups[1].Value;
+
+            // Fallback: any standalone 3–10 digit number in the name
+            m = Regex.Match(name, @"\b(\d{3,10})\b");
             return m.Success ? m.Groups[1].Value : null;
         }
 
@@ -79,4 +87,6 @@ namespace XboxSteamCoverArtFixer.Models
         private void OnPropertyChanged([CallerMemberName] string? name = null)
             => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
+
+
 }
